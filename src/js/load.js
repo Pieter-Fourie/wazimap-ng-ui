@@ -10,6 +10,7 @@ import {onProfileLoaded as onProfileLoadedSearch, Search} from './search';
 import {MapItGeographyProvider} from './geography_providers/mapit';
 import {WazimapProvider} from './geography_providers/wazimap';
 import {MapChip} from './mapchip';
+import {LoadingSpinner} from './loading_spinner';
 
 import "data-visualisations/src/charts/bar/reusable-bar-chart/stories.styles.css";
 import "../css/barchart.css";
@@ -74,6 +75,8 @@ export default function load(serverUrl, profileId) {
     const printButton = $("#profile-print");
     const mapchip = new MapChip();
     const search = new Search(2);
+	const pdataLoadSpinner = new LoadingSpinner($('.point-data__h2_loading'));
+	pdataLoadSpinner.show();
 
     controller.registerWebflowEvents();
     controller.on("hashChange", payload => loadGeography(baseUrl, controller, payload));
