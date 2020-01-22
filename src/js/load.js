@@ -7,27 +7,20 @@ import {MapControl} from './maps';
 import {getJSON, numFmt} from './utils';
 import {Profile} from './profile';
 import {onProfileLoaded as onProfileLoadedSearch, Search} from './search';
+import {MapItGeographyProvider} from './geography_providers/mapit';
+import {WazimapProvider} from './geography_providers/wazimap';
 import {MapChip} from './mapchip';
 
 import "data-visualisations/src/charts/bar/reusable-bar-chart/stories.styles.css";
 import "../css/barchart.css";
 
 
-var baseUrl = null;
-const SACode = "ZA"
-const mapcontrol = new MapControl();
-const controller = new Controller();
-const pdfprinter = new PDFPrinter();
-const printButton = $("#profile-print");
-const mapchip = new MapChip();
-const search = new Search(2);
-
-function loadGeography(payload) {
+function loadGeography(baseUrl, controller, payload) {
     var payload = payload.payload;
     const profileId = payload.profileId;
     const geographyId = payload.geographyId;
 
-    const url = `${baseUrl}/api/v1/profiles/${profileId}/geographies/${geographyId}/`;
+    const url = `${baseUrl}/profiles/${profileId}/geographies/${geographyId}/`;
     getJSON(url).then((data) => {
         var profile = new Profile(data);
 
@@ -71,20 +64,25 @@ function loadPopup(payload) {
 }
 
 export default function load(serverUrl, profileId) {
-    baseUrl = serverUrl;
+    const baseUrl = `${serverUrl}/api/v1`;
+    const SACode = "ZA"
+    const geographyProvider = new WazimapProvider(baseUrl)
+    //const geographyProvider = new MapItGeographyProvider()
+    const mapcontrol = new MapControl(geographyProvider);
+    const controller = new Controller();
+    const pdfprinter = new PDFPrinter();
+    const printButton = $("#profile-print");
+    const mapchip = new MapChip();
+    const search = new Search(2);
+
     controller.registerWebflowEvents();
-    controller.on("hashChange", loadGeography);
+    controller.on("hashChange", payload => loadGeography(baseUrl, controller, payload));
     controller.on("subindicatorClick", payload => mapcontrol.choropleth(payload.payload))
     controller.on("subindicatorClick", payload => mapchip.onSubIndicatorChange(payload.payload));
     controller.on("layerMouseOver", payload => loadPopup(payload));
     controller.on("profileLoaded", onProfileLoadedSearch);
     controller.on("printProfile", payload => pdfprinter.printDiv(payload))
-    controller.on("searchResultClick", payload => {
-        // TODO MDB is South Africa-specific - need to figure out how to abstract
-        // this away
-        console.log(payload)
-        mapcontrol.overlayBoundaries(payload.payload.code)
-    })
+    controller.on("searchResultClick", payload => mapcontrol.overlayBoundaries(payload.payload.code, false))
 
     mapcontrol.on("layerClick", payload => controller.onLayerClick(payload))
     mapcontrol.on("layerMouseOver", payload => controller.onLayerMouseOver(payload))

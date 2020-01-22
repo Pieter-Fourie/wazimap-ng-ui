@@ -1,4 +1,4 @@
-import {getJSON} from './utils' 
+import {getJSON} from '../utils' 
 import GeographyProvider from './geography_provider'
 import {Geography} from './geography_provider'
 
@@ -65,7 +65,7 @@ class MapItGeography extends Geography {
 		this.provider = geoprovider;
 	}
 
-	_get_parent() {
+	_getParent() {
 		if (this.mdb_levels != undefined) {
 			const match = this.mdb_levels.match("[A-Z]{2}-([A-Z0-9]+)[|][A-Z]+");
 			if (match != null) {
@@ -79,11 +79,11 @@ class MapItGeography extends Geography {
 		return Promise.resolve(null);
 	}
 
-	get_parent() {
+	get parent() {
 		const self = this;
 
 		if (this._parent == null) {
-			return this._get_parent().then(parent => {
+			return this._getParent().then(parent => {
 				self._parent = parent;
 				return this._parent;
 			});
@@ -92,13 +92,13 @@ class MapItGeography extends Geography {
 		return this._parent;
 	}
 
-	_get_children() {
+	_getChildren() {
 		return Promise.resolve(this.provider.getChildren(this.code));
 	}
 
 	get_children() {
 		if (this._children == undefined || this._children.length == 0) {
-			return this._get_children().then(children => {
+			return this._getChildren().then(children => {
 				this._children = children;
 				return children;
 			})
@@ -146,6 +146,7 @@ export class MapItGeographyProvider extends GeographyProvider {
 		super();
 		this.api = new MapItApiHelper();
 		this.geographies = {}
+        this.defaultGeography = MAPITSA; 
 	}
 
 	getGeography(code) {
@@ -210,6 +211,9 @@ export class MapItGeographyProvider extends GeographyProvider {
 	childGeometries(code) {
 		const loadChildGeographies = true;
 		return this.getGeometry(code, loadChildGeographies).then(children => {
+			children.forEach(child => {
+				child.properties.code = child.properties.codes.MDB;
+			})
 			const geojson = {
 				features: children,
 				type: "FeatureCollection"
@@ -220,7 +224,6 @@ export class MapItGeographyProvider extends GeographyProvider {
 	}
 
 	_createGeography(js) {
-		console.log(js);
 		const code = js.codes.MDB;
 		const geography = new MapItGeography(this, code);
 

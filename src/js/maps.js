@@ -2,13 +2,10 @@ import {interpolateBlues as d3interpolateBlues} from 'd3-scale-chromatic';
 import {scaleSequential as d3scaleSequential} from 'd3-scale';
 import {min as d3min, max as d3max} from 'd3-array';
 
-import MapIt from './mapit';
-import {MAPITSA, MapItGeographyProvider} from './mapit';
 import {Observable} from './utils';
 
 const defaultCoordinates = {"lat": -28.995409163308832, "long": 25.093833387362697, "zoom": 6};
 const defaultTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const defaultGeography = MAPITSA
 
 var defaultStyles = {
     hoverOnly: {
@@ -64,7 +61,7 @@ class LayerStyler {
 }
 
 export class MapControl extends Observable {
-    constructor(config) {
+    constructor(geographyProvider, config) {
         super();
         config = config || {}
 
@@ -74,7 +71,7 @@ export class MapControl extends Observable {
         this.zoomMap = config.zoomMap || true;
         this.boundaryLayers = null;
 
-        this.layerCache = new LayerCache();
+        this.layerCache = new LayerCache(geographyProvider);
         this.layerStyler = new LayerStyler();
 
         this.map = this.configureMap(coords, tileUrl);
@@ -125,10 +122,11 @@ export class MapControl extends Observable {
         })
     };
 
-    overlayBoundaries(areaCode) {
+    overlayBoundaries(areaCode, showChildren=true) {
         var self = this;
+        const boundaryLayers = [];
 
-        self.layerCache.getLayers(areaCode).then(layers => {
+        self.layerCache.getLayers(areaCode, boundaryLayers, showChildren).then(layers => {
             self.boundaryLayers.clearLayers();
 
             var secondaryLayers = layers.slice(1).reverse();
@@ -148,7 +146,7 @@ export class MapControl extends Observable {
             var layerPayload = function(layer) {
                 var prop = layer.layer.feature.properties;
                 return {
-                    mapItId: prop.codes.MDB,
+                    mapItId: prop.code,
                     layer: layer.layer,
                     element: layer,
                     properties: prop,
@@ -160,7 +158,7 @@ export class MapControl extends Observable {
                     .off("click")
                     .on("click", (el) => {
                         const prop = el.layer.feature.properties;
-                        const areaCode = prop.codes.MDB;
+                        const areaCode = prop.code;
                         self.overlayBoundaries(areaCode);
                         self.triggerEvent("layerClick", layerPayload(el));
                     }) 
@@ -195,16 +193,17 @@ A node contains the following attributes:
     - code
 */
 export class LayerCache {
-    constructor() {
-        this.mapit = new MapItGeographyProvider()
+    constructor(geographyProvider) {
+        this.mapit = geographyProvider
+        //this.mapit = new MapItGeographyProvider()
         this.geoMap = {};
     };
 
     hashGeographies(layer) {
         var self = this;
         layer.eachLayer(l => {
-            var props = l.feature.properties;
-            var code = props.codes.MDB;
+            const props = l.feature.properties;
+            const code = props.code;
             self.geoMap[code] = l; 
         })
     };
@@ -215,10 +214,10 @@ export class LayerCache {
      * @param  {Function}
      * @return {[type]}
      */
-    getLayers(code, layers) {
+    getLayers(code, layers, showChildren=true) {
         const self = this;
         if (code == null)
-            code = defaultGeography;
+            code = this.mapit.defaultGeography;
 
         if (layers == undefined)
             layers = [];
@@ -232,7 +231,12 @@ export class LayerCache {
                     return code
                 })
             })
-            .then(code => self.mapit.childGeometries(code))
+            .then(code => {
+                if (showChildren)
+                    return self.mapit.childGeometries(code)
+                else
+                    return self.mapit.getGeography(code).then(geo => geo.geometry);
+            })
             .then(geojson => {
                 const layer = L.geoJson(geojson);
                 const hasGeometries = layer.getLayers().length > 0;
@@ -240,11 +244,11 @@ export class LayerCache {
                 if (hasGeometries)
                     layers.push(layer);
 
-                return geography.get_parent()
+                return geography.parent
             })
             .then(parent => {
                 if (parent != null) {
-                    geography = geography.get_parent();
+                    geography = geography.parent;
                     return self.getLayers(geography.code, layers);
                 }
 
